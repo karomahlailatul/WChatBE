@@ -11,7 +11,6 @@ const sendEmail = require("../middlewares/sendEmail");
 
 const { authenticateGoogle, uploadToGoogleDrive, deleteFromGoogleDrive } = require("../middlewares/googleDriveService");
 
-
 const UserController = {
   registerAccount: async (req, res) => {
     try {
@@ -20,47 +19,49 @@ const UserController = {
 
       try {
         if (checkEmail.rowCount == 1) throw "Email already used";
+        // delete checkEmail.rows[0].password;
       } catch (error) {
+        delete checkEmail.rows[0].password;
         return commonHelper.response(res, null, 403, error);
       }
 
-      // users 
+      // users
       const saltRounds = 10;
       const passwordHash = bcrypt.hashSync(password, saltRounds);
       const id = uuidv4().toLocaleLowerCase();
 
-      // session 
-      const id_session =  uuidv4().toLocaleLowerCase();
-      const session = crypto.randomBytes(64).toString("hex");
-
-      
       // verification
       const verify = "false";
 
-      const id_users_verification = uuidv4().toLocaleLowerCase();
+      const users_verification_id = uuidv4().toLocaleLowerCase();
       const users_id = id;
-      const token = crypto.randomBytes(32).toString("hex");
+      const token = crypto.randomBytes(64).toString("hex");
 
-      // localhost
+      // url localhost
       // const url = `${process.env.BASE_URL}users/verify?id=${users_id}&token=${token}`;
 
-      // deployment
+      // url deployment
       const url = `${process.env.BASE_URL}/verification?type=email&id=${users_id}&token=${token}`;
 
-      //send email 
+      // session
+      const session_id = crypto.randomBytes(64).toString("hex");
+      const connection = "false";
+
+      //send email
       await sendEmail(email, "Verify Email", url);
 
-      // add db table users
-      await usersModel.create(id, email, passwordHash, username, verify);
-      
-      // add db table verification
-      await usersModel.createUsersVerification(id_users_verification, users_id, token);
-      
-      // add db table session
+      // insert db table users
+      await usersModel.createUsers(id, email, passwordHash, verify);
 
+      // insert db table verification
+      await usersModel.createUsersVerification(users_verification_id, users_id, token);
+
+      // insert db table session
+      await usersModel.createSession(session_id, users_id, connection);
 
       commonHelper.response(res, null, 201, "Sign Up Success, Please check your email for verification");
     } catch (error) {
+      console.log(error)
       res.send(createError(400));
     }
   },
@@ -98,14 +99,33 @@ const UserController = {
   },
   loginAccount: async (req, res) => {
     try {
-      const { email, password } = req.body;
+      const { email_username, password } = req.body;
+
+      // console.log(email_username)
+      // console.log(email_username.includes("@"))
+      let findEmailUsername;
+      let alert;
+
+      if (email_username.includes("@")) {
+        findEmailUsername = await usersModel.findEmailSession(email_username);
+        alert = "Email"
+      } else {
+        findEmailUsername = await usersModel.findUsernameSession(email_username);
+        alert = "Username"
+      }
+
+      // console.log(findEmailUsername);
+      
       const {
         rows: [user],
-      } = await usersModel.findEmail(email);
+      } = findEmailUsername;
 
+      // console.log(user);
+      
       if (!user) {
-        return commonHelper.response(res, null, 403, "Email is invalid");
+        return commonHelper.response(res, null, 403, `${alert} is invalid`);
       }
+
       const isValidPassword = bcrypt.compareSync(password, user.password);
       // console.log(isValidPassword);
       if (!isValidPassword) {
@@ -117,9 +137,11 @@ const UserController = {
       }
 
       delete user.password;
+
       const payload = {
+        id : user.id,
         email: user.email,
-        role: user.role,
+        session: user.session_id,
       };
       user.token = authHelper.generateToken(payload);
       user.refreshToken = authHelper.generateRefreshToken(payload);
@@ -137,7 +159,7 @@ const UserController = {
       const email = req.payload.email;
       const {
         rows: [user],
-      } = await usersModel.findEmail(email);
+      } = await usersModel.findEmailSession(email);
       delete user.password;
 
       if (typeof queryUpdate === "undefined" && typeof queryDelete === "undefined") {
@@ -147,24 +169,22 @@ const UserController = {
           const auth = authenticateGoogle();
 
           if (user.picture != null || user.picture != undefined) {
-            
             await deleteFromGoogleDrive(user.picture, auth);
-            
           }
 
           // Upload to Drive
           const response = await uploadToGoogleDrive(req.file, auth);
           const picture = `https://drive.google.com/thumbnail?id=${response.data.id}&sz=s1080`;
 
-          const { name, gender, phone, date_of_birth, job_desk, system, location, description, role } = req.body;
+          const { name, phone ,status ,username} = req.body;
 
-          await usersModel.updateAccount(email, name, gender, phone, date_of_birth, picture, job_desk, system, location, description, role);
+          await usersModel.updateAccount(email, name,  phone, status, picture, username);
 
           commonHelper.response(res, null, 201, "Profile has been updated");
         } else {
-          const { name, gender, phone, date_of_birth, job_desk, system, location, description, role } = req.body;
+          const { name,  phone, status , username} = req.body;
 
-          await usersModel.updateNoPict(email, name, gender, phone, date_of_birth, job_desk, system, location, description, role);
+          await usersModel.updateNoPict(email, name,  phone, status , username);
 
           commonHelper.response(res, null, 201, "Profile has been updated");
         }
@@ -173,6 +193,7 @@ const UserController = {
         commonHelper.response(res, null, 200, "Account has been deleted");
       }
     } catch (error) {
+      console.log(error)
       res.send(createError(404));
     }
   },
@@ -204,9 +225,14 @@ const UserController = {
   refreshToken: async (req, res) => {
     const refreshToken = req.body.refreshToken;
     const decoded = jwt.verify(refreshToken, process.env.SECRETE_KEY_JWT);
+    // const payload = {
+    //   email: decoded.email,
+    //   role: decoded.role,
+    // };
     const payload = {
+      id : decoded.id,
       email: decoded.email,
-      role: decoded.role,
+      session: decoded.session_id,
     };
     const result = {
       token: authHelper.generateToken(payload),
@@ -214,7 +240,6 @@ const UserController = {
     };
     commonHelper.response(res, result, 200, "Refresh Token Success");
   },
-  
 };
 
 module.exports = UserController;
