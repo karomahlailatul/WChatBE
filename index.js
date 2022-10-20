@@ -30,17 +30,17 @@ app.use("/", mainRouter);
 
 app.use("/tmp", express.static("./tmp"));
 
-// app.all("*", (req, res, next) => {
-//   next(createError());
-// });
+app.all("*", (req, res, next) => {
+  next(createError());
+});
 
-// app.use((err, req, res, next) => {
-//   const statusCode = err.status;
-//   if (res.status(statusCode)) {
-//     res.send(createError(statusCode, err));
-//   }
-//   next();
-// });
+app.use((err, req, res, next) => {
+  const statusCode = err.status;
+  if (res.status(statusCode)) {
+    res.send(createError(statusCode, err));
+  }
+  next();
+});
 
 const port = process.env.PORT;
 // app.listen(port, () => {
