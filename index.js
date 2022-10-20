@@ -6,11 +6,13 @@ const createError = require("http-errors");
 const helmet = require("helmet");
 const xss = require("xss-clean");
 
+// configurate express
 const app = express();
 
 const mainRouter = require("./src/routes/index");
 
 app.use(express.json());
+
 app.use(express.urlencoded({ extended: true }));
 
 app.use(morgan("dev"));
@@ -22,32 +24,33 @@ app.use(
 );
 
 app.use(helmet());
+
 app.use(xss());
 
-// app.use("/api/v1", mainRouter);
+app.use("/api/v1", mainRouter);
 
-app.use("/", mainRouter);
+// app.use("/", mainRouter);
 
 app.use("/tmp", express.static("./tmp"));
 
-// app.all("*", (req, res, next) => {
-//   next(createError());
-// });
+app.all("*", (req, res, next) => {
+  next(createError());
+});
 
-// app.use((err, req, res, next) => {
-//   const statusCode = err.status;
-//   if (res.status(statusCode)) {
-//     res.send(createError(statusCode, err));
-//   }
-//   next();
-// });
+app.use((err, req, res, next) => {
+  const statusCode = err.status;
+  if (res.status(statusCode)) {
+    res.send(createError(statusCode, err));
+  }
+  next();
+});
 
-const port = process.env.PORT;
+// const port = process.env.PORT;
 // app.listen(port, () => {
 //   console.log(`server running on :${port}`);
 // });
 
-// configurate socket io
+// configurate socket.io
 const { createServer } = require("http");
 const { Server } = require("socket.io");
 
@@ -55,130 +58,133 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: "*",
+    // origin: 'http://localhost:3000',
   },
 });
 
 const crypto = require("crypto");
-const randomId = () => crypto.randomBytes(8).toString("hex");
+const randomId = () => crypto.randomBytes(64).toString("hex");
 
 const sessionModel = require("./src/models/session");
 const messageModel = require("./src/models/message");
 
 io.use(async (socket, next) => {
-  // console.log(socket)
-  const sessionID = socket.handshake.auth.sessionID;
-
-  // const session = await sessionModel.selectAllSessionId(sessionID)
-
-  // console.log(session)
+  const sessionID = socket.handshake.auth.sessionId;
   // console.log(sessionID)
   if (sessionID) {
-    // const session = sessionStore.findSession(sessionID);
     const session = await sessionModel.selectAllSessionId(sessionID);
-    if (session) {
+    if (session.rowCount != 0) {
       socket.sessionID = sessionID;
-      socket.userID = session.users_id;
-      socket.username = session.username;
+      socket.userID = session.rows[0].users_id;
+      socket.username = session.rows[0].username;
+      socket.email = session.rows[0].email;
+      socket.name = session.rows[0].name;
+      socket.picture = session.rows[0].picture;
+      socket.status = session.rows[0].status;
       return next();
     }
-  } else {
-    const username = socket.handshake.auth.username;
-
-    // console.log(username)
-    if (!username) {
-      return next(new Error("eror username"));
-    } else {
-      const id = randomId();
-      const email = "test123@email.com";
-      const password = "123";
-      const verify = "false";
-
-      const session_id = randomId();
-      const users_id = id;
-      const connection = "false";
-
-      await sessionModel.insertSessionAndUsers(id, email, password, username, verify, session_id, users_id, connection);
-
-      socket.sessionID = session_id;
-      socket.userID = id;
-      socket.username = username;
-    }
-
-    return next();
   }
+  next();
 });
 
 io.on("connection", async (socket) => {
-  const sessionID = socket.sessionID;
+  const sessionID = await socket.sessionID;
+  //  console.log(sessionID);
+  if (sessionID) {
+    await sessionModel.updateSessionConnectionTrue(sessionID);
+    const session = await sessionModel.selectAllSessionId(sessionID);
 
-  await sessionModel.updateSessionConnectionTrue(sessionID);
+    socket.join(session.rows[0].users_id);
 
-  const session = await sessionModel.selectAllSessionId(sessionID);
+    const users = [];
 
-  socket.emit("session", {
-    sessionID: session.rows[0].id,
-    userID: session.rows[0].users_id,
-  });
+    const messagesPerUser = new Map();
 
-  socket.join(session.rows[0].users_id);
+    const messageAllUsersID = await messageModel.selectAllUsersID(session.rows[0].users_id);
 
-  const users = [];
+    // console.log(messageAllUsersID)
 
-  const messagesPerUser = new Map();
+    messageAllUsersID.rows.forEach((message) => {
+      const { id, sender, receiver } = message;
+      const otherUser = session.rows[0].users_id === sender ? receiver : sender;
+      // console.log(id)
 
-  const messageAllUsersID = await messageModel.selectAllUsersID(session.rows[0].users_id);
+      // if (messagesPerUser.has(otherUser) ) {
+      //   console.log( " ini push ")
+      // // if (messagesPerUser.has(otherUser) && messagesPerUser.has(id) ) {
+      //   messagesPerUser.get(otherUser).push(message);
+      // } else {
+      //   console.log( " ini push gas")
+      //   messagesPerUser.set(otherUser, [message]);
+      // }
 
-  messageAllUsersID.rows.forEach((message) => {
-    const { from, to } = message;
-    const otherUser = session.rows[0].users_id === from ? to : from;
-    if (messagesPerUser.has(otherUser)) {
-      messagesPerUser.get(otherUser).push(message);
-    } else {
-      messagesPerUser.set(otherUser, [message]);
-    }
-  });
+      // console.log(messagesPerUser.has(id));
 
-  const sessionAll = await sessionModel.selectAllSession();
-
-  sessionAll.rows.forEach((session) => {
-    users.push({
-      userID: session.users_id,
-      username: session.username,
-      connected: session.connection,
-      messages: messagesPerUser.get(session.users_id) || [],
+      if (messagesPerUser.has(id)) {
+        if (messagesPerUser.has(otherUser)) {
+          // console.log(" ini get ");
+          // if (messagesPerUser.has(otherUser) && messagesPerUser.has(id) ) {
+          messagesPerUser.get(otherUser).push(message);
+        } else {
+          // console.log(" ini set");
+          messagesPerUser.set(otherUser, [message]);
+        }
+      } else {
+        // console.log(" ini set");
+        messagesPerUser.set(id, [message]);
+      }
     });
-  });
 
-  socket.emit("users", users);
+    const sessionAll = await sessionModel.selectAllSession();
 
-  socket.broadcast.emit("user connected", {
-    userID: session.rows[0].users_id,
-    username: session.rows[0].username,
-    connected: true,
-    messages: [],
-  });
+    sessionAll.rows.forEach((session) => {
+      users.push({
+        id: session.users_id,
+        userID: session.users_id,
+        username: session.username,
+        connected: session.connection,
+        email: session.email,
+        name: session.name,
+        picture: session.picture,
+        status: session.status,
+        messages: messagesPerUser.get(session.users_id) || [],
+        messagesUnread : 0
+      });
+    });
 
-  socket.on("private message", async ({ content, to }) => {
-    const message = {
-      content,
-      from: session.rows[0].users_id,
-      to,
-    };
-    const id = randomId();
-    socket.to(to).to(session.rows[0].users_id).emit("private message", message);
-    await messageModel.insertMessage(id, session.rows[0].users_id, to, content);
-  });
+    socket.emit("users", users);
 
-  socket.on("disconnect", async () => {
-    const matchingSockets = await io.in(session.rows[0].users_id).allSockets();
-    const isDisconnected = matchingSockets.size === 0;
-    if (isDisconnected) {
-      socket.broadcast.emit("user disconnected", session.rows[0].users_id);
-      await sessionModel.updateSessionConnectionFalse(sessionID);
-    }
-  });
+    socket.broadcast.emit("user connected", {
+      id: session.rows[0].users_id,
+      userID: session.rows[0].users_id,
+      username: session.rows[0].username,
+      email: session.rows[0].email,
+      name: session.rows[0].name,
+      picture: session.rows[0].picture,
+      status: session.rows[0].status,
+      connected: true,
+      messages: [],
+    });
+
+    socket.on("messagePrivate", async ({ id, content, sender, receiver, created_on }) => {
+      // console.log({ id, content, sender, receiver, created_on });
+      socket.to(receiver).to(sender).emit("messagePrivateForward", { id, content, sender, receiver, created_on });
+      await messageModel.insertMessage(id, content, sender, receiver, created_on);
+    });
+
+    socket.on("disconnect", async () => {
+      const matchingSockets = await io.in(session.rows[0].users_id).allSockets();
+      const isDisconnected = matchingSockets.size === 0;
+      if (isDisconnected) {
+        socket.broadcast.emit("user disconnected", session.rows[0].users_id);
+        await sessionModel.updateSessionConnectionFalse(sessionID);
+      }
+    });
+  }
 });
 
+// server listen port
+const port = process.env.PORT;
 httpServer.listen(port, () => {
-  console.log(`local ${port}`);
+  console.log(`listen on port ${port}`);
 });

@@ -20,7 +20,7 @@ router
   .put("/profile/changeEmail", protect, ControllerUsers.changeEmail)
   .put("/profile/changePassword", protect, ControllerUsers.changePassword)
 
-  .get("/verify", ControllerUsers.VerifyAccount)
+  .post("/verify", ControllerUsers.VerifyAccount)
   
 
 module.exports = router;
