@@ -1,11 +1,19 @@
 const Pool = require('../config/db')
 
 const selectAllUsersID = (UsersID) => {
+<<<<<<< HEAD
     return Pool.query(`select  message.id, message.content, message.sender, message.receiver , message.created_on  from message  inner join users on users.id = sender or users.id = receiver  where sender =  '${UsersID}' or receiver = '${UsersID}' `);
 }
 
 const insertMessage = (
     id , content, sender, receiver , created_on
+=======
+    return Pool.query(`select  message.id, message.sender, message.receiver, message.content, message.created_on, users.id as users_id, users.email, users.phone,  users.username,  users.name,  users.picture,  users.status  from message  inner join users on users.id = sender or users.id = receiver  where sender =  '${UsersID}' or receiver = '${UsersID}' `);
+}
+
+const insertMessage = (
+    id , content, sender, receiver
+>>>>>>> 361c1f7d7fdd2b65eee8e1a8b126c6e744dfe22a
 ) => {
     return Pool.query(`insert into message (  id , sender , receiver , content ,created_on) values ('${id}', '${sender}', '${receiver}', '${content}' , '${created_on}')`)
 }
