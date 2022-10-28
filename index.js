@@ -250,6 +250,7 @@ io.on("connection", async (socket) => {
         }
       } else {
         messagesPerUser.set(id, [message]);
+>>>>>>>>> Temporary merge branch 2
       }
     });
 
@@ -268,7 +269,10 @@ io.on("connection", async (socket) => {
         status: session.status,
         created_on: session.created_on,
         messages: messagesPerUser.get(session.users_id) || [],
-        messagesUnread: 0,
+<<<<<<<<< Temporary merge branch 1
+=========
+        messagesUnread : 0
+>>>>>>>>> Temporary merge branch 2
       });
     });
 
