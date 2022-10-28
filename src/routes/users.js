@@ -8,6 +8,8 @@ const upload = require("../middlewares/upload");
 //     validateUpdateProfile,
 //     validateChangeEmail,
 //     validateChangePassword } = require('../middlewares/common')
+const passport = require("passport");
+const errorFrontEndUrl =  "http://localhost:3000/testOuth2/error"
 
 router
 
@@ -22,5 +24,7 @@ router
 
   .post("/verify", ControllerUsers.VerifyAccount)
   
+  .get('/auth/google', passport.authenticate('google', {  session: false,  scope: [ 'email', 'profile' ]}))
+  .get('/auth/google/callback',  passport.authenticate( 'google', { failureRedirect:  errorFrontEndUrl , session: false,}),ControllerUsers.googleSign  )
 
 module.exports = router;

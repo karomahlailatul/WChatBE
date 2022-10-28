@@ -4,7 +4,6 @@ const findEmail = (email) => {
   return Pool.query(`SELECT * FROM users WHERE email='${email}'`);
 };
 
-
 const findUsername = (username) => {
   return Pool.query(`select * from users where username='${username}'`);
 };
@@ -14,17 +13,22 @@ const findId = (id) => {
 };
 
 const findEmailSession = (email) => {
-  return Pool.query(`select users.id  ,  users.email  ,  users.password  ,  users.phone  ,  users.username  ,  users.name  ,  users.picture  , users.status , users.verify , users.created_on , users.updated_on ,  session.id as session_id  , session.connection  from users  inner join session on users.id = session.users_id where email='${email}'`);
+  return Pool.query(
+    `select users.id  ,  users.email  ,  users.password  ,  users.phone  ,  users.username  ,  users.name  ,  users.picture  , users.status , users.verify , users.created_on , users.updated_on ,  session.id as session_id  , session.connection  from users  inner join session on users.id = session.users_id where email='${email}'`
+  );
 };
 
 const findUsernameSession = (username) => {
-  return Pool.query(`select users.id  ,  users.email  ,  users.password  ,  users.phone  ,  users.username  ,  users.name  ,  users.picture  , users.status , users.verify , users.created_on , users.updated_on ,  session.id as session_id  , session.connection  from users  inner join session on users.id = session.users_id where username='${username}'`);
+  return Pool.query(
+    `select users.id  ,  users.email  ,  users.password  ,  users.phone  ,  users.username  ,  users.name  ,  users.picture  , users.status , users.verify , users.created_on , users.updated_on ,  session.id as session_id  , session.connection  from users  inner join session on users.id = session.users_id where username='${username}'`
+  );
 };
 
 const findIdSession = (id) => {
-  return Pool.query(`select users.id  ,  users.email  ,  users.password  ,  users.phone  ,  users.username  ,  users.name  ,  users.picture  , users.status , users.verify , users.created_on , users.updated_on ,  session.id as session_id  , session.connection  from users  inner join session on users.id = session.users_id where id='${id}'`);
+  return Pool.query(
+    `select users.id  ,  users.email  ,  users.password  ,  users.phone  ,  users.username  ,  users.name  ,  users.picture  , users.status , users.verify , users.created_on , users.updated_on ,  session.id as session_id  , session.connection  from users  inner join session on users.id = session.users_id where id='${id}'`
+  );
 };
-
 
 const createUsers = (id, email, passwordHash, verify) => {
   return Pool.query(`insert into users ( id , email , password , verify ) values ( '${id}' , '${email}' , '${passwordHash}' ,'${verify}') `);
@@ -50,16 +54,12 @@ const updateAccountVerification = (queryUsersId) => {
   return Pool.query(`update users set verify='true' where id='${queryUsersId}' `);
 };
 
-const updateAccount = (email, name,  phone, status, picture,username) => {
-  return Pool.query(
-    `update users set name='${name}',  status='${status}', phone='${phone}' , picture='${picture}' , username='${username}' where email='${email}'`
-  );
+const updateAccount = (email, name, phone, status, picture, username) => {
+  return Pool.query(`update users set name='${name}',  status='${status}', phone='${phone}' , picture='${picture}' , username='${username}' where email='${email}' returning email, name,  phone, status, picture,username`);
 };
 
-const updateNoPict = (email, name,  phone, status , username) => {
-  return Pool.query(
-    `update users set name='${name}',  status='${status}', phone='${phone}' , username='${username}' where email='${email}'`
-  );
+const updateNoPict = (email, name, phone, status, username) => {
+  return Pool.query(`update users set name='${name}',  status='${status}', phone='${phone}' , username='${username}' where email='${email}' returning email, name,  phone, status, picture,username`);
 };
 
 const changeEmailAccount = (email, emailBody) => {
@@ -74,9 +74,12 @@ const deleteAccount = (email) => {
   return Pool.query(`delete from users where email='${email}'`);
 };
 
-
-
-
+const createAccountGoogle = (uuid, email, picture, name, verify) => {
+  return Pool.query(`insert into users
+   ( id , email , picture , name   , verify ) 
+   
+   values ( '${uuid}' , '${email}' , '${picture}' , '${name}' ,'${verify}') `);
+};
 
 module.exports = {
   findEmail,
@@ -96,4 +99,5 @@ module.exports = {
   changeEmailAccount,
   changePassword,
   deleteAccount,
+  createAccountGoogle,
 };

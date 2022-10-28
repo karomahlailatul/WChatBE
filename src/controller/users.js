@@ -61,7 +61,7 @@ const UserController = {
 
       commonHelper.response(res, null, 201, "Sign Up Success, Please check your email for verification");
     } catch (error) {
-      console.log(error)
+      console.log(error);
       res.send(createError(400));
     }
   },
@@ -101,33 +101,27 @@ const UserController = {
     try {
       const { email_username, password } = req.body;
 
-      // console.log(email_username)
-      // console.log(email_username.includes("@"))
       let findEmailUsername;
       let alert;
 
       if (email_username.includes("@")) {
         findEmailUsername = await usersModel.findEmailSession(email_username);
-        alert = "Email"
+        alert = "Email";
       } else {
         findEmailUsername = await usersModel.findUsernameSession(email_username);
-        alert = "Username"
+        alert = "Username";
       }
 
-      // console.log(findEmailUsername);
-      
       const {
         rows: [user],
       } = findEmailUsername;
 
-      // console.log(user);
-      
       if (!user) {
         return commonHelper.response(res, null, 403, `${alert} is invalid`);
       }
 
       const isValidPassword = bcrypt.compareSync(password, user.password);
-      // console.log(isValidPassword);
+     
       if (!isValidPassword) {
         return commonHelper.response(res, null, 403, "Password is invalid");
       }
@@ -139,7 +133,7 @@ const UserController = {
       delete user.password;
 
       const payload = {
-        id : user.id,
+        id: user.id,
         email: user.email,
         session: user.session_id,
       };
@@ -176,24 +170,24 @@ const UserController = {
           const response = await uploadToGoogleDrive(req.file, auth);
           const picture = `https://drive.google.com/thumbnail?id=${response.data.id}&sz=s1080`;
 
-          const { name, phone ,status ,username} = req.body;
+          const { name, phone, status, username } = req.body;
 
-          await usersModel.updateAccount(email, name,  phone, status, picture, username);
+          const result = await usersModel.updateAccount(email, name, phone, status, picture, username);
 
-          commonHelper.response(res, null, 201, "Profile has been updated");
+          commonHelper.response(res, result.rows, 201, "Profile has been updated");
         } else {
-          const { name,  phone, status , username} = req.body;
+          const { name, phone, status, username } = req.body;
 
-          await usersModel.updateNoPict(email, name,  phone, status , username);
+          const result = await usersModel.updateNoPict(email, name, phone, status, username);
 
-          commonHelper.response(res, null, 201, "Profile has been updated");
+          commonHelper.response(res, result.rows, 201, "Profile has been updated");
         }
       } else if (typeof queryUpdate === "undefined" && typeof queryDelete === "string") {
         await usersModel.deleteAccount(email);
         commonHelper.response(res, null, 200, "Account has been deleted");
       }
     } catch (error) {
-      console.log(error)
+      console.log(error);
       res.send(createError(404));
     }
   },
@@ -201,8 +195,6 @@ const UserController = {
     try {
       const email = req.payload.email;
       const emailBody = req.body.email;
-      // console.log(email + emailBody);
-      // console.log(req.body.email);
       await usersModel.changeEmailAccount(email, emailBody);
       commonHelper.response(res, null, 201, "Email Account has been update, Please Login again");
     } catch (error) {
@@ -230,7 +222,7 @@ const UserController = {
     //   role: decoded.role,
     // };
     const payload = {
-      id : decoded.id,
+      id: decoded.id,
       email: decoded.email,
       session: decoded.session_id,
     };
@@ -239,6 +231,46 @@ const UserController = {
       refreshToken: authHelper.generateRefreshToken(payload),
     };
     commonHelper.response(res, result, 200, "Refresh Token Success");
+  },
+  googleSign: async (req, res) => {
+    const { name, email, picture } = JSON.parse(req.user)._json;
+    const result = await usersModel.findEmailSession(email);
+
+    let uuid;
+    let session_id;
+
+    if (result.rowCount == 1) {
+      uuid = result.rows[0].id;
+      session_id = result.rows[0].session_id;
+    } else {
+      uuid = uuidv4().toLocaleLowerCase();
+      const verify = "true";
+      await usersModel.createAccountGoogle(uuid, email, picture, name, verify);
+      session_id = crypto.randomBytes(64).toString("hex");
+      const connection = "false";
+      await usersModel.createSession(session_id, uuid, connection);
+    }
+
+    const payload = {
+      email: email,
+      session_id: session_id,
+    };
+
+    const token = authHelper.generateToken(payload);
+    const refreshToken = authHelper.generateRefreshToken(payload);
+
+    const data = {
+      id: uuid,
+      token: token,
+      refreshToken: refreshToken,
+      session_id: session_id,
+    };
+
+    // encodeBase64
+    let bufferDataEncode = Buffer.from(JSON.stringify(data));
+    let resultBase64DataEncode = bufferDataEncode.toString("base64");
+
+    return res.redirect(`${process.env.CALLBACK_URL_FRONT_END}?success&code=${resultBase64DataEncode}`);
   },
 };
 

@@ -73,3 +73,31 @@ primary key (id)
 
 
 
+create table group_chat (
+id text not null ,
+owner_id text ,
+group_name text ,
+group_logo text, 
+group_member text[], 
+created_on timestamp default CURRENT_TIMESTAMP not null	,
+constraint 	owner_id foreign key(owner_id) 	references 	users(id) ON DELETE CASCADE,
+primary key (id) 
+);
+
+
+create table message_group (
+id text not null ,
+sender text ,
+content text ,
+content_type text ,
+group_chat_id text ,
+created_on timestamp default CURRENT_TIMESTAMP not null	,
+constraint 	sender foreign key(sender) 	references 	users(id) ON DELETE CASCADE,
+constraint 	group_chat_id foreign key(group_chat_id) 	references 	group_chat(id) ON DELETE CASCADE,
+primary key (id) 
+);
+
+
+
+
+
